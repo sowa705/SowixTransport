@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29009.5
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SowixTransport", "SowixTransport\SowixTransport.csproj", "{8BC27E05-994A-4B81-A2E9-8BCA0EF76A54}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SowixMessenger", "SowixMessenger\SowixMessenger.csproj", "{26C60714-F3A4-4B85-9459-39F4F9EC4F97}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8BC27E05-994A-4B81-A2E9-8BCA0EF76A54}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8BC27E05-994A-4B81-A2E9-8BCA0EF76A54}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8BC27E05-994A-4B81-A2E9-8BCA0EF76A54}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8BC27E05-994A-4B81-A2E9-8BCA0EF76A54}.Release|Any CPU.Build.0 = Release|Any CPU
+		{26C60714-F3A4-4B85-9459-39F4F9EC4F97}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{26C60714-F3A4-4B85-9459-39F4F9EC4F97}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{26C60714-F3A4-4B85-9459-39F4F9EC4F97}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{26C60714-F3A4-4B85-9459-39F4F9EC4F97}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {668FF50C-0E1D-4A11-88AF-9375C3EFE40E}
+	EndGlobalSection
+EndGlobal
