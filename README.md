@@ -5,7 +5,7 @@ Refer to SowixMessenger project in this repository for simple example program
 # Capabilities
 Sending and receiving data: Yes  
 QoS: Partially  
-RTT measurement: Yes 
+RTT measurement: Yes  
 Timeouting users: Yes  
 User count Limits: No  
 # Contributing
