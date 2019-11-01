@@ -4,7 +4,7 @@
     {
         ClientState state;
     }
-    enum ClientState
+    public enum ClientState
     {
         Disconnected,
         Connected

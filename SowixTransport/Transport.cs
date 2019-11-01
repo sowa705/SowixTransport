@@ -22,6 +22,8 @@ namespace SowixTransport
 
         int CModeTick;
 
+        public ClientState connectionState;
+
         int tick=0;
         public Transport()
         {
@@ -35,12 +37,14 @@ namespace SowixTransport
         public void Disconnect()
         {
             Send("ST_Disconnect", new byte[1], 0, 0);
+            connectionState = ClientState.Disconnected;
         }
         public void Connect(string hostname,int port)
         {
             socket = new UdpClient(hostname,port);
             clientmode = true;
             Send("ST_Connect",new byte[1],0,ControlChannel);
+
         }
         public int AddChannel(ChannelType type) //nawet nie myśl o przydzielaniu channelID samemu sobie
         {
@@ -75,7 +79,7 @@ namespace SowixTransport
             {
                 if (tick-CModeTick>20)
                 {
-                    //Console.WriteLine("Lost connection");
+                    connectionState = ClientState.Disconnected;
                 }
             }
             else
@@ -126,7 +130,7 @@ namespace SowixTransport
 
                 //Console.WriteLine($"<{packet.Channel} {packet.PacketType} {packet.PacketID}");
 
-                Peer peer = Peers.FirstOrDefault(x=>x.EndPoint.ToString()==remote.ToString()); //to porównanie to skurwiała kupa gówna i jebać EndPoint.operator==
+                Peer peer = Peers.FirstOrDefault(x=>x.EndPoint.ToString()==remote.ToString());
                 int peerIndex = Peers.IndexOf(peer);
 
                 if (!clientmode)
@@ -158,6 +162,7 @@ namespace SowixTransport
                     {
                         Send("ST_Ping",packet.Data,0,packet.Channel);
                         CModeTick = tick;
+                        connectionState = ClientState.Connected;
                         return new Event() { Type = EventType.None };
                     }
                 }
