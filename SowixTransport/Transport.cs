@@ -12,17 +12,21 @@ namespace SowixTransport
     {
         UdpClient socket;
 
-        List<Channel> TXChannels=new List<Channel>();
-        List<Channel> RXChannels=new List<Channel>();
+        List<Channel> Channels=new List<Channel>();
+
+        int ControlChannel;
+        int PingChannel;
 
         public List<Peer> Peers = new List<Peer>();
         bool clientmode;
 
+        int CModeTick;
+
         int tick=0;
         public Transport()
         {
-            AddTXChannel(ChannelType.Unreliable); //tu ma być reliable ale nie jest
-            AddRXChannel(ChannelType.Unreliable);
+            ControlChannel=AddChannel(ChannelType.Reliable);
+            PingChannel=AddChannel(ChannelType.Unreliable);
         }
         public void Bind(int port)
         {
@@ -36,21 +40,14 @@ namespace SowixTransport
         {
             socket = new UdpClient(hostname,port);
             clientmode = true;
-            Send("ST_Connect",new byte[1],0,0);
+            Send("ST_Connect",new byte[1],0,ControlChannel);
         }
-        public int AddTXChannel(ChannelType type) //nawet nie myśl o przydzielaniu channelID samemu sobie
+        public int AddChannel(ChannelType type) //nawet nie myśl o przydzielaniu channelID samemu sobie
         {
             Channel c = new Channel();
             c.Type = type;
-            TXChannels.Add(c);
-            return TXChannels.Count - 1;
-        }
-        public int AddRXChannel(ChannelType type)
-        {
-            Channel c = new Channel();
-            c.Type = type;
-            RXChannels.Add(c);
-            return RXChannels.Count - 1;
+            Channels.Add(c);
+            return Channels.Count - 1;
         }
         public List<Event> Update()
         {
@@ -74,15 +71,46 @@ namespace SowixTransport
                 }
                 
             }
-            foreach (var item in TXChannels)
+            if (clientmode)
             {
-                if (item.Type == ChannelType.Reliable)
+                if (tick-CModeTick>20)
                 {
-                    foreach (var packet in item.Packets)
+                    //Console.WriteLine("Lost connection");
+                }
+            }
+            else
+            {
+                foreach (var item in Peers)
+                {
+                    if (tick-item.LastTick>20&&item.Status!=PeerStatus.Disconnected)
                     {
+                        item.Status = PeerStatus.Disconnected;
+                        events.Add(new Event() { Type = EventType.PeerDisconnected,Peer = Peers.IndexOf(item)});
+                    }
+                }
+                if (tick % 5 == 0)
+                {
+                    for (int i = 0; i < Peers.Count; i++)
+                    {
+                        Send("ST_Ping", BitConverter.GetBytes(tick), i, PingChannel);
+                    }
+                }
+            }
+            
+            foreach (var item in Channels)
+            {
+                if (item.Type == ChannelType.Reliable||item.Type==ChannelType.SequencedReliable)
+                {
+                    for(int i=item.Packets.Count-1;i>=0;i--)
+                    {
+                        var packet = item.Packets[i];
                         if (tick - 2 > packet.SendTime)
                         {
-                            Resend(packet);
+                            SendRaw(packet);
+                            if (tick - 2 > packet.SendTime)
+                            {
+                                item.Packets.RemoveAt(i);
+                            }
                         }
                     }
                 }
@@ -95,6 +123,8 @@ namespace SowixTransport
             try
             {
                 Packet packet = Packet.Deserialize(data);
+
+                //Console.WriteLine($"<{packet.Channel} {packet.PacketType} {packet.PacketID}");
 
                 Peer peer = Peers.FirstOrDefault(x=>x.EndPoint.ToString()==remote.ToString()); //to porównanie to skurwiała kupa gówna i jebać EndPoint.operator==
                 int peerIndex = Peers.IndexOf(peer);
@@ -114,43 +144,60 @@ namespace SowixTransport
                             return new Event() { Type = EventType.None };
                         }
                     }
+                    if (packet.PacketType == "ST_Ping")
+                    {
+                        Peers[peerIndex].RTT = tick - BitConverter.ToInt32(packet.Data, 0);
+                        Peers[peerIndex].LastTick = tick;
+                        Console.WriteLine("RTT: " + Peers[peerIndex].RTT);
+                        return new Event() { Type = EventType.None };
+                    }
+                }
+                else
+                {
+                    if (packet.PacketType == "ST_Ping")
+                    {
+                        Send("ST_Ping",packet.Data,0,packet.Channel);
+                        CModeTick = tick;
+                        return new Event() { Type = EventType.None };
+                    }
                 }
                 if (packet.PacketType == "ST_Disconnect")
                 {
                     Peers[peerIndex].Status = PeerStatus.Disconnected;
                     return new Event() { Type = EventType.PeerDisconnected,Peer=peerIndex};
                 }
-                //sequence check
-                if (RXChannels[packet.Channel].Type==ChannelType.SequencedReliable|| RXChannels[packet.Channel].Type == ChannelType.Sequenced)
+                
+                //ack
+                if (packet.PacketType == "ST_ACK")
                 {
-                    if (Peers[peerIndex].RXChannelCurrentPackets[packet.Channel] > packet.PacketID) //packet is older than new packets
+                    //Console.WriteLine("Received ACK");
+                    Channels[packet.Channel].Packets.Remove(Channels[packet.Channel].Packets.First(x => x.PacketID == packet.PacketID));
+                    return new Event() { Type = EventType.None };
+                }
+                if (Channels[packet.Channel].Type == ChannelType.Reliable || Channels[packet.Channel].Type == ChannelType.SequencedReliable)
+                {
+                    //Console.WriteLine("Sent");
+                    SendAck(packet.Channel, packet.PacketID, peerIndex);
+                }
+                //sequence check
+                if (Channels[packet.Channel].Type==ChannelType.SequencedReliable|| Channels[packet.Channel].Type == ChannelType.Sequenced)
+                {
+                    if (Peers[peerIndex].RXChannelCurrentPackets[packet.Channel] >= packet.PacketID) //packet is older than new packets
                     {
+                        //Console.WriteLine("Dropped by sequencer");
                         return new Event() { Type = EventType.None };
                     }
                     else
                     {
+                        //Console.WriteLine("Accepted by sequencer");
                         Peers[peerIndex].RXChannelCurrentPackets[packet.Channel] = packet.PacketID;
                     }
                 }
-                if (RXChannels[packet.Channel].Type==ChannelType.Reliable|| RXChannels[packet.Channel].Type==ChannelType.SequencedReliable)
-                {
-                    SendNoAck("ST_ACK",BitConverter.GetBytes(packet.PacketID),peerIndex,packet.Channel);
-                }
-                //ack
-                if (packet.PacketType=="ST_ACK")
-                {
-                    TXChannels[packet.Channel].Packets.Remove(TXChannels[packet.Channel].Packets.First(x=>x.PacketID==packet.PacketID));
-                    return new Event() { Type = EventType.None };
-                }
-                
-                if (packet.Channel==0)
-                {
-                    //return new Event() {Type=EventType.None };
-                }
                 return new Event() { Type = EventType.Data, Data = packet.Data, Peer = peerIndex, PacketType = packet.PacketType };
             }
-            catch
+            catch(Exception e)
             {
+                Console.WriteLine(e.Message);
                 return new Event() { Type = EventType.None };
             }
         }
@@ -159,7 +206,7 @@ namespace SowixTransport
         {
             Peer peer = new Peer();
             peer.EndPoint = endPoint;
-            peer.RXChannelCurrentPackets = new int[RXChannels.Count];
+            peer.RXChannelCurrentPackets = new int[Channels.Count];
             peer.Status = PeerStatus.Connected;
             Peers.Add(peer);
         }
@@ -168,55 +215,28 @@ namespace SowixTransport
 
         public void Send(string type,byte[] data,int destination,int channelID)
         {
-            int packetID = TXChannels[channelID].CurrentPacket++;
+            int packetID = Channels[channelID].CurrentPacket++;
 
             Packet packet = new Packet((byte)channelID,packetID,type,data);
             packet.SendTime = tick;
             packet.Destination = destination;
 
-            if (TXChannels[channelID].Type==ChannelType.Reliable||TXChannels[channelID].Type==ChannelType.SequencedReliable)
+            if (Channels[channelID].Type==ChannelType.Reliable||Channels[channelID].Type==ChannelType.SequencedReliable)
             {
-                TXChannels[channelID].Packets.Add(packet);
+                Channels[channelID].Packets.Add(packet);
             }
 
-            byte[] p = packet.Serialize();
-            if (clientmode)
-            {
-                socket.Send(p,p.Length);
-                return;
-            }
-            if (Peers[destination].Status != PeerStatus.Connected)
-            {
-                return;
-            }
-            socket.Send(p,p.Length,Peers[destination].EndPoint);
+            SendRaw(packet);
         }
-        void SendNoAck(string type, byte[] data, int destination, int channelID)
+        void SendAck(int channelID,int packetID,int destination)
         {
-            int packetID = TXChannels[channelID].CurrentPacket++;
-
-            Packet packet = new Packet((byte)channelID, packetID, type, data);
+            Packet packet = new Packet((byte)channelID, packetID, "ST_ACK", new byte[1]);
             packet.SendTime = tick;
             packet.Destination = destination;
 
-            if (TXChannels[channelID].Type == ChannelType.Reliable || TXChannels[channelID].Type == ChannelType.SequencedReliable)
-            {
-                TXChannels[channelID].Packets.Add(packet);
-            }
-
-            byte[] p = packet.Serialize();
-            if (clientmode)
-            {
-                socket.Send(p, p.Length);
-                return;
-            }
-            if (Peers[destination].Status != PeerStatus.Connected)
-            {
-                return;
-            }
-            socket.Send(p, p.Length, Peers[destination].EndPoint);
+            SendRaw(packet);
         }
-        void Resend(Packet packet)
+        void SendRaw(Packet packet)
         {
             byte[] p = packet.Serialize();
             if (clientmode)
@@ -224,6 +244,11 @@ namespace SowixTransport
                 socket.Send(p, p.Length);
                 return;
             }
+            if (Peers[packet.Destination].Status != PeerStatus.Connected)
+            {
+                return;
+            }
+            //Console.WriteLine($">{packet.Channel} {packet.PacketType} {packet.PacketID}");
             socket.Send(p, p.Length, Peers[packet.Destination].EndPoint);
         }
     }

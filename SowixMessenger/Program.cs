@@ -11,8 +11,7 @@ namespace SowixMessenger
     class Program
     {
         static SowixTransport.Transport t;
-        static int messageRXChannel;
-        static int messageTXChannel;
+        static int messageChannel;
         static int position;
         static void Main(string[] args)
         {
@@ -47,8 +46,7 @@ namespace SowixMessenger
         {
             Console.Clear();
             t = new SowixTransport.Transport();
-            messageRXChannel = t.AddRXChannel(SowixTransport.ChannelType.Unreliable);
-            messageTXChannel = t.AddTXChannel(SowixTransport.ChannelType.Unreliable);
+            messageChannel = t.AddChannel(SowixTransport.ChannelType.Reliable);
             t.Connect(address.ToString(),2137);
             new Thread(ClientRecvThread).Start();
             position = Console.WindowTop;
@@ -69,15 +67,15 @@ namespace SowixMessenger
                 }
                 else if (str.StartsWith("/nickname "))
                 {
-                    t.Send("Nickname",Encoding.UTF8.GetBytes( str.Substring(10)), 0, messageTXChannel);
+                    t.Send("Nickname",Encoding.UTF8.GetBytes( str.Substring(10)), 0, messageChannel);
                 }
                 else if (str=="/users")
                 {
-                    t.Send("GetUsers", new byte[1], 0, messageTXChannel);
+                    t.Send("GetUsers", new byte[1], 0, messageChannel);
                 }
                 else
                 {
-                    t.Send("Message", message, 0, messageTXChannel);
+                    t.Send("Message", message, 0, messageChannel);
                 }
                 Thread.Sleep(100);
             }
@@ -118,8 +116,7 @@ namespace SowixMessenger
         static void Server()
         {
             t=new SowixTransport.Transport();
-            messageRXChannel= t.AddRXChannel(SowixTransport.ChannelType.Unreliable);
-            messageTXChannel = t.AddTXChannel(SowixTransport.ChannelType.Unreliable);
+            messageChannel = t.AddChannel(SowixTransport.ChannelType.SequencedReliable);
 
             t.Bind(2137);
 
@@ -137,7 +134,7 @@ namespace SowixMessenger
                             Nicknames.Add($"User {item.Peer}");
                             for (int i = 0; i < t.Peers.Count; i++)
                             {
-                                t.Send("SMessage", Encoding.UTF8.GetBytes($"Connected {Nicknames[i]}"), i, messageTXChannel);
+                                t.Send("SMessage", Encoding.UTF8.GetBytes($"Connected {Nicknames[i]}"), i, messageChannel);
                             }
                             break;
                         case SowixTransport.EventType.Data:
@@ -145,13 +142,13 @@ namespace SowixMessenger
                             {
                                 if (Nicknames.Contains(Encoding.UTF8.GetString(item.Data)))
                                 {
-                                    t.Send("SMessage", Encoding.UTF8.GetBytes("This username is already taken"), item.Peer, messageTXChannel);
+                                    t.Send("SMessage", Encoding.UTF8.GetBytes("This username is already taken"), item.Peer, messageChannel);
                                 }
                                 else
                                 {
                                     for (int i = 0; i < t.Peers.Count; i++)
                                     {
-                                        t.Send("SMessage", Encoding.UTF8.GetBytes($"{Nicknames[item.Peer]} changed nickname to {Encoding.UTF8.GetString(item.Data)}"), i, messageTXChannel);
+                                        t.Send("SMessage", Encoding.UTF8.GetBytes($"{Nicknames[item.Peer]} changed nickname to {Encoding.UTF8.GetString(item.Data)}"), i, messageChannel);
                                     }
                                     Nicknames[item.Peer] = Encoding.UTF8.GetString(item.Data);
                                 }
@@ -162,7 +159,7 @@ namespace SowixMessenger
                                 string message = $"{Nicknames[item.Peer]}: "+Encoding.UTF8.GetString(item.Data);
                                 for (int i = 0; i < t.Peers.Count; i++)
                                 {
-                                    t.Send("Message",Encoding.UTF8.GetBytes(message),i,messageTXChannel);
+                                    t.Send("Message",Encoding.UTF8.GetBytes(message),i,messageChannel);
                                 }
                             }
                             if (item.PacketType == "GetUsers")
@@ -177,13 +174,13 @@ namespace SowixMessenger
                                     }
                                     a += $"{user.EndPoint} as {Nicknames[i]}\n";
                                 }
-                                t.Send("SMessage", Encoding.UTF8.GetBytes("User list:\n"+a), item.Peer, messageTXChannel);
+                                t.Send("SMessage", Encoding.UTF8.GetBytes("User list:\n"+a), item.Peer, messageChannel);
                             }
                             break;
                         case SowixTransport.EventType.PeerDisconnected:
                             for (int i = 0; i < t.Peers.Count; i++)
                             {
-                                t.Send("SMessage",Encoding.UTF8.GetBytes( $"Disconnected {Nicknames[i]}"), i, messageTXChannel);
+                                t.Send("SMessage",Encoding.UTF8.GetBytes( $"Disconnected {Nicknames[i]}"), i, messageChannel);
                             }
                             break;
                         default:

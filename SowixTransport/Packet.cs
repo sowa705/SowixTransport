@@ -5,7 +5,7 @@ namespace SowixTransport
 {
     class Packet
     {
-        public byte ChannelID;
+        public byte Channel;
         public int PacketID;
         public string PacketType;
         public byte[] Data;
@@ -25,13 +25,12 @@ namespace SowixTransport
             Data = data;
         }
 
-        public byte Channel { get; }
 
         public static Packet Deserialize(byte[] packet)
         {
             Packet p = new Packet();
 
-            p.ChannelID = packet[0];
+            p.Channel = packet[0];
             p.PacketID = BitConverter.ToInt32(packet,1);
             p.PacketType = Encoding.ASCII.GetString(packet,6,packet[5]);
             p.Data = new byte[packet.Length-6-packet[5]];
@@ -43,7 +42,7 @@ namespace SowixTransport
         public byte[] Serialize()
         {
             byte[] data = new byte[6+PacketType.Length+Data.Length];
-            data[0] = ChannelID;
+            data[0] = Channel;
 
             Array.Copy(BitConverter.GetBytes(PacketID),0,data,1,4);
 
