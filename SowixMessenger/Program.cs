@@ -46,6 +46,7 @@ namespace SowixMessenger
         {
             Console.Clear();
             t = new SowixTransport.Transport();
+            t.transport = new SowixTransport.TCPTransport();
             messageChannel = t.AddChannel(SowixTransport.ChannelType.Reliable);
             t.Connect(address.ToString(),2137);
             new Thread(ClientRecvThread).Start();
@@ -116,6 +117,7 @@ namespace SowixMessenger
         static void Server()
         {
             t=new SowixTransport.Transport();
+            t.transport = new SowixTransport.TCPTransport();
             messageChannel = t.AddChannel(SowixTransport.ChannelType.SequencedReliable);
 
             t.Bind(2137);
